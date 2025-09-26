@@ -34,25 +34,11 @@
     </div>
   </section>
 
-  <!-- Latest Posts (Static for now) -->
+  <!-- Latest Posts -->
   <section class="posts container">
     <h2>Latest Posts</h2>
-    <div class="post-grid">
-      <div class="post-card">
-        <h3>Understanding Cloud Firewalls</h3>
-        <p>Learn how firewalls protect e-commerce platforms from online threats.</p>
-        <a href="#">Read →</a>
-      </div>
-      <div class="post-card">
-        <h3>PCI Compliance Basics</h3>
-        <p>A simple guide to keeping your payment systems compliant and safe.</p>
-        <a href="#">Read →</a>
-      </div>
-      <div class="post-card">
-        <h3>Top 5 DDoS Protection Tools</h3>
-        <p>Compare the best tools to prevent downtime and secure your business.</p>
-        <a href="#">Read →</a>
-      </div>
+    <div id="post-grid" class="post-grid">
+      <p>Loading latest posts…</p>
     </div>
   </section>
 
@@ -74,5 +60,59 @@
       <p>© 2025 CloudEcom Security. All rights reserved.</p>
     </div>
   </footer>
+
+  <!-- Script to load sitemap -->
+  <script>
+    const SITEMAP_URL = "sitemap.xml"; // change to full URL if needed
+    const MAX_POSTS = 15;
+
+    async function loadPosts() {
+      const grid = document.getElementById("post-grid");
+      try {
+        const res = await fetch(SITEMAP_URL);
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const text = await res.text();
+        const parser = new DOMParser();
+        const xml = parser.parseFromString(text, "application/xml");
+
+        let urls = Array.from(xml.querySelectorAll("url")).map((u) => {
+          return {
+            loc: u.querySelector("loc")?.textContent,
+            lastmod: u.querySelector("lastmod")?.textContent,
+          };
+        });
+
+        // Sort by lastmod (newest first)
+        urls.sort((a, b) => {
+          if (a.lastmod && b.lastmod) {
+            return new Date(b.lastmod) - new Date(a.lastmod);
+          }
+          return 0;
+        });
+
+        urls = urls.slice(0, MAX_POSTS);
+
+        grid.innerHTML = "";
+        urls.forEach((u) => {
+          const li = document.createElement("div");
+          li.className = "post-card";
+          const date = u.lastmod ? new Date(u.lastmod).toLocaleDateString() : "";
+          const title = decodeURIComponent(u.loc.split("/").filter(Boolean).pop());
+          li.innerHTML = `
+            <h3>${title}</h3>
+            <p>${u.loc}</p>
+            <small>${date}</small><br/>
+            <a href="${u.loc}" target="_blank">Read →</a>
+          `;
+          grid.appendChild(li);
+        });
+      } catch (err) {
+        console.error(err);
+        grid.innerHTML = "<p>Failed to load posts. (CORS blocked or sitemap missing)</p>";
+      }
+    }
+
+    loadPosts();
+  </script>
 </body>
 </html>
