@@ -61,10 +61,26 @@
     </div>
   </footer>
 
-  <!-- Script to load sitemap -->
+  <!-- Script to load sitemap and fetch page meta -->
   <script>
-    const SITEMAP_URL = "sitemap.xml"; // change to full URL if needed
+    const SITEMAP_URL = "sitemap.xml"; // must be same domain for GitHub Pages
     const MAX_POSTS = 15;
+
+    async function fetchPageMeta(url) {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const text = await res.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(text, "text/html");
+        const title = doc.querySelector("title")?.textContent || url;
+        const desc = doc.querySelector("meta[name='description']")?.getAttribute("content") || "";
+        return { title, description: desc };
+      } catch (err) {
+        console.warn("Meta fetch failed for", url, err);
+        return { title: url, description: "" };
+      }
+    }
 
     async function loadPosts() {
       const grid = document.getElementById("post-grid");
@@ -75,12 +91,10 @@
         const parser = new DOMParser();
         const xml = parser.parseFromString(text, "application/xml");
 
-        let urls = Array.from(xml.querySelectorAll("url")).map((u) => {
-          return {
-            loc: u.querySelector("loc")?.textContent,
-            lastmod: u.querySelector("lastmod")?.textContent,
-          };
-        });
+        let urls = Array.from(xml.querySelectorAll("url")).map((u) => ({
+          loc: u.querySelector("loc")?.textContent,
+          lastmod: u.querySelector("lastmod")?.textContent,
+        }));
 
         // Sort by lastmod (newest first)
         urls.sort((a, b) => {
@@ -92,19 +106,27 @@
 
         urls = urls.slice(0, MAX_POSTS);
 
+        grid.innerHTML = "<p>Loading post details…</p>";
+
+        const enriched = await Promise.all(
+          urls.map(async (u) => {
+            const meta = await fetchPageMeta(u.loc);
+            return { ...u, ...meta };
+          })
+        );
+
         grid.innerHTML = "";
-        urls.forEach((u) => {
-          const li = document.createElement("div");
-          li.className = "post-card";
-          const date = u.lastmod ? new Date(u.lastmod).toLocaleDateString() : "";
-          const title = decodeURIComponent(u.loc.split("/").filter(Boolean).pop());
-          li.innerHTML = `
-            <h3>${title}</h3>
-            <p>${u.loc}</p>
+        enriched.forEach((p) => {
+          const card = document.createElement("div");
+          card.className = "post-card";
+          const date = p.lastmod ? new Date(p.lastmod).toLocaleDateString() : "";
+          card.innerHTML = `
+            <h3>${p.title}</h3>
+            <p>${p.description || p.loc}</p>
             <small>${date}</small><br/>
-            <a href="${u.loc}" target="_blank">Read →</a>
+            <a href="${p.loc}" target="_blank">Read →</a>
           `;
-          grid.appendChild(li);
+          grid.appendChild(card);
         });
       } catch (err) {
         console.error(err);
